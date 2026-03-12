@@ -1,11 +1,11 @@
-# BirdLasser Social
+# BirdLasser Visualiser
 
 A dark, map-first web app for visualizing your [BirdLasser](https://www.birdlasser.com/) bird sighting data. Import your trip card CSVs and explore your life list on an interactive map with heatmaps, marker clustering, lifer tracking, and cumulative species charts.
 
 BirdLasser only exports one trip at a time as CSV — this tool lets you import multiple trips, deduplicate sightings, and see everything together in one place.
 
 <p align="center">
-  <img src="public/docs-screenshot.png" alt="BirdLasser Social — map view with species list and lifer markers" width="800" />
+  <img src="public/docs-screenshot.png" alt="BirdLasser Visualiser — map view with species list and lifer markers" width="800" />
 </p>
 
 ## Features

@@ -12,6 +12,7 @@ import PillFilters from "@/components/PillFilters";
 import CumulativeChart from "@/components/CumulativeChart";
 import CommandPalette from "@/components/CommandPalette";
 import ImportView from "@/components/ImportView";
+import BottomSheet from "@/components/BottomSheet";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -170,26 +171,28 @@ export default function Home() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <span className="text-sm text-[#888888]">Search species...</span>
-          <kbd className="text-xs text-[#888888] bg-[#1a1a1a] border border-[#2a2a2a] rounded px-1.5 py-0.5 ml-8">
+          <kbd className="hidden md:inline text-xs text-[#888888] bg-[#1a1a1a] border border-[#2a2a2a] rounded px-1.5 py-0.5 ml-8">
             Ctrl K
           </kbd>
         </FloatingPanel>
       </div>
 
-      {/* Side panel */}
-      <SidePanel
-        species={filteredSpecies}
-        trips={trips}
-        totalSightings={filteredSightings.length}
-        selectedSpeciesId={selectedSpeciesId}
-        onSpeciesClick={handleSpeciesClick}
-        onTripClick={handleTripClick}
-        activeTab={sideTab}
-        onTabChange={setSideTab}
-      />
+      {/* Side panel — desktop only */}
+      <div className="hidden md:block">
+        <SidePanel
+          species={filteredSpecies}
+          trips={trips}
+          totalSightings={filteredSightings.length}
+          selectedSpeciesId={selectedSpeciesId}
+          onSpeciesClick={handleSpeciesClick}
+          onTripClick={handleTripClick}
+          activeTab={sideTab}
+          onTabChange={setSideTab}
+        />
+      </div>
 
-      {/* Bottom bar */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+      {/* Bottom bar — desktop only */}
+      <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
         <FloatingPanel className="flex items-center gap-3 px-4 py-2.5">
           <PillFilters
             filters={filters}
@@ -272,6 +275,32 @@ export default function Home() {
           </FloatingPanel>
         </div>
       )}
+
+      {/* Bottom sheet — mobile only */}
+      <BottomSheet
+        species={filteredSpecies}
+        trips={trips}
+        totalSightings={filteredSightings.length}
+        selectedSpeciesId={selectedSpeciesId}
+        onSpeciesClick={handleSpeciesClick}
+        onTripClick={handleTripClick}
+        activeTab={sideTab}
+        onTabChange={setSideTab}
+        filters={filters}
+        activeFilter={activeFilter}
+        onFilterChange={(v) => {
+          setActiveFilter(v);
+          setSelectedTrip(undefined);
+          setSelectedSpeciesId(undefined);
+        }}
+        tileStyle={tileStyle}
+        onTileStyleChange={setTileStyle}
+        showHeatmap={showHeatmap}
+        onToggleHeatmap={() => setShowHeatmap((v) => !v)}
+        showChart={showChart}
+        onToggleChart={() => setShowChart((v) => !v)}
+        onImportMore={() => setHasData(false)}
+      />
 
       <CumulativeChart
         data={cumulativeData}

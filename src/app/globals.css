@@ -57,6 +57,14 @@ body {
   color: #10b981 !important;
 }
 
+/* Hide scrollbar utility */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Dark scrollbars */
 * {
   scrollbar-width: thin;
