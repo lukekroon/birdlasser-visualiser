@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { getSpeciesList, getTrips, getCumulativeData, filterSightings } from "@/data";
+import { getSpeciesList, getTrips, getChartData, filterSightings } from "@/data";
 import { Sighting } from "@/data/types";
 import { getAllSightings, getSightingCount, clearAllData } from "@/lib/db";
 import { MapTileStyle } from "@/components/MapView";
@@ -50,7 +50,7 @@ export default function Home() {
 
   const species = useMemo(() => getSpeciesList(sightings), [sightings]);
   const trips = useMemo(() => getTrips(sightings), [sightings]);
-  const cumulativeData = useMemo(() => getCumulativeData(sightings), [sightings]);
+  const chartData = useMemo(() => getChartData(sightings, activeFilter), [sightings, activeFilter]);
 
   // Map of speciesId → lifer number (e.g. species #142 on your life list)
   const liferMap = useMemo(() => {
@@ -300,10 +300,12 @@ export default function Home() {
         showChart={showChart}
         onToggleChart={() => setShowChart((v) => !v)}
         onImportMore={() => setHasData(false)}
+        collapseWhenTrue={showChart}
       />
 
       <CumulativeChart
-        data={cumulativeData}
+        data={chartData}
+        activeFilter={activeFilter}
         visible={showChart}
         onClose={() => setShowChart(false)}
       />

@@ -247,20 +247,19 @@ export default function MapView({
   function addHeatLayer(map: L.Map, data: Sighting[]) {
     const points = data
       .filter(s => s.latitude && s.longitude)
-      .map(s => [s.latitude, s.longitude, 0.5] as [number, number, number]);
+      .map(s => [s.latitude, s.longitude, 1.0] as [number, number, number]);
 
     // @ts-expect-error leaflet.heat
     const heat = L.heatLayer(points, {
-      radius: 25,
-      blur: 15,
-      minOpacity: 0.3,
+      radius: 30,
+      blur: 20,
+      minOpacity: 0.5,
+      max: 3,
       gradient: {
-        0.0: "#0a0a0a",
-        0.2: "#064e3b",
-        0.4: "#059669",
-        0.6: "#10b981",
+        0.2: "#059669",
+        0.5: "#10b981",
         0.8: "#34d399",
-        1.0: "#a7f3d0",
+        1.0: "#ecfdf5",
       },
     });
     heat.addTo(map);

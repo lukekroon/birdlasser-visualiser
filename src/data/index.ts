@@ -60,24 +60,67 @@ export function getTrips(sightings: Sighting[]): Trip[] {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export function getCumulativeData(sightings: Sighting[]): { date: string; count: number }[] {
-  const seenSpecies = new Set<number>();
+export interface ChartData {
+  cumulative: { date: string; count: number }[];
+  bars: { period: string; count: number; label: string }[];
+}
+
+export function getChartData(sightings: Sighting[], activeFilter: string): ChartData {
   const sorted = [...sightings].sort((a, b) => {
     const da = a.isoDate || a.date;
     const db = b.isoDate || b.date;
     return da.localeCompare(db);
   });
 
-  const points: { date: string; count: number }[] = [];
-  for (const s of sorted) {
-    if (s.dontCountLifelist === "Y") continue;
-    const wasNew = !seenSpecies.has(s.speciesId);
-    seenSpecies.add(s.speciesId);
-    if (wasNew) {
-      points.push({ date: s.date, count: seenSpecies.size });
+  if (activeFilter === "all") {
+    // Global life list: cumulative lifers over all time, bars = lifers added per year
+    const seenSpecies = new Set<number>();
+    const cumulative: { date: string; count: number }[] = [];
+    const lifersByYear = new Map<string, number>();
+
+    for (const s of sorted) {
+      if (s.dontCountLifelist === "Y") continue;
+      if (!seenSpecies.has(s.speciesId)) {
+        seenSpecies.add(s.speciesId);
+        cumulative.push({ date: s.date, count: seenSpecies.size });
+        const year = s.date.slice(0, 4);
+        lifersByYear.set(year, (lifersByYear.get(year) || 0) + 1);
+      }
     }
+
+    const bars = Array.from(lifersByYear.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([year, count]) => ({ period: year, count, label: year }));
+
+    return { cumulative, bars };
+  } else {
+    // Year list: cumulative new species seen in this year, bars = new species per month
+    const year = activeFilter;
+    const seenThisYear = new Set<number>();
+    const cumulative: { date: string; count: number }[] = [];
+    const newByMonth = new Map<string, number>();
+
+    for (const s of sorted) {
+      const dateStr = s.date.replace(/\//g, "-");
+      if (dateStr.slice(0, 4) !== year) continue;
+      if (!seenThisYear.has(s.speciesId)) {
+        seenThisYear.add(s.speciesId);
+        cumulative.push({ date: s.date, count: seenThisYear.size });
+        const month = dateStr.slice(0, 7); // "2025-03"
+        newByMonth.set(month, (newByMonth.get(month) || 0) + 1);
+      }
+    }
+
+    const bars = Array.from(newByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, count]) => {
+        const monthNum = parseInt(month.slice(5, 7));
+        const label = new Date(2000, monthNum - 1, 1).toLocaleString("en", { month: "short" });
+        return { period: month, count, label };
+      });
+
+    return { cumulative, bars };
   }
-  return points;
 }
 
 export function filterSightings(

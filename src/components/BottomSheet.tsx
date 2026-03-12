@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Species, Trip } from "@/data/types";
 import { MapTileStyle } from "@/components/MapView";
@@ -36,6 +36,7 @@ interface BottomSheetProps {
   showChart: boolean;
   onToggleChart: () => void;
   onImportMore: () => void;
+  collapseWhenTrue?: boolean;
 }
 
 function SpeciesList({
@@ -162,8 +163,13 @@ export default function BottomSheet({
   showChart,
   onToggleChart,
   onImportMore,
+  collapseWhenTrue,
 }: BottomSheetProps) {
   const [snap, setSnap] = useState<SnapState>("collapsed");
+
+  useEffect(() => {
+    if (collapseWhenTrue) setSnap("collapsed");
+  }, [collapseWhenTrue]);
   const [isDragging, setIsDragging] = useState(false);
   const [liveH, setLiveH] = useState(COLLAPSED_H);
 
