@@ -27,6 +27,7 @@ function SpeciesList({
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: species.length,
     getScrollElement: () => parentRef.current,
@@ -92,6 +93,7 @@ function TripList({
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: trips.length,
     getScrollElement: () => parentRef.current,

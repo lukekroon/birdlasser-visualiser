@@ -49,6 +49,7 @@ function SpeciesList({
   onSpeciesClick: (id: number) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: species.length,
     getScrollElement: () => parentRef.current,
@@ -103,6 +104,7 @@ function TripList({
   onTripClick: (name: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: trips.length,
     getScrollElement: () => parentRef.current,
@@ -168,6 +170,7 @@ export default function BottomSheet({
   const [snap, setSnap] = useState<SnapState>("collapsed");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (collapseWhenTrue) setSnap("collapsed");
   }, [collapseWhenTrue]);
   const [isDragging, setIsDragging] = useState(false);

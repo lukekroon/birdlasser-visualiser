@@ -45,6 +45,7 @@ export default function Home() {
 
   // Load sightings from IndexedDB on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 

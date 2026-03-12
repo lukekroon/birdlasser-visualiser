@@ -46,6 +46,7 @@ export default function CommandPalette({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("");
       // Focus after a microtask to ensure DOM is ready
       Promise.resolve().then(() => inputRef.current?.focus());
