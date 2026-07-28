@@ -2,12 +2,22 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { getSpeciesList, getTrips, getChartData, filterSightings } from "@/data";
-import { Sighting } from "@/data/types";
+import {
+  getSpeciesList,
+  getTrips,
+  getChartData,
+  filterSightings,
+  compareYears,
+  getComparableYears,
+  getComparisonChartData,
+} from "@/data";
+import { CompareBucket, Sighting } from "@/data/types";
 import { getAllSightings, getSightingCount, clearAllData } from "@/lib/db";
 import { MapTileStyle } from "@/components/MapView";
 import FloatingPanel from "@/components/FloatingPanel";
-import SidePanel from "@/components/SidePanel";
+import SidePanel, { SideTab } from "@/components/SidePanel";
+import { CompareScope } from "@/components/CompareList";
+import YearCompareChip from "@/components/YearCompareChip";
 import PillFilters from "@/components/PillFilters";
 import CumulativeChart from "@/components/CumulativeChart";
 import CommandPalette from "@/components/CommandPalette";
@@ -25,10 +35,17 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showChart, setShowChart] = useState(false);
-  const [sideTab, setSideTab] = useState<"species" | "trips">("species");
+  const [sideTab, setSideTab] = useState<SideTab>("species");
   const [selectedTrip, setSelectedTrip] = useState<string | undefined>();
   const [tileStyle, setTileStyle] = useState<MapTileStyle>("satellite");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  // Year-vs-year comparison. `compareYear` being set is the single source of truth for
+  // "am I in compare mode"; activeFilter continues to hold year A, so the existing filter
+  // path is untouched.
+  const [compareYear, setCompareYear] = useState<string | undefined>();
+  const [compareBucket, setCompareBucket] = useState<CompareBucket | undefined>();
+  const [compareScope, setCompareScope] = useState<CompareScope>("bucketYear");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -49,8 +66,9 @@ export default function Home() {
     loadData();
   }, [loadData]);
 
+  // Full species list, kept unfiltered so the command palette can search everything.
+  // The panel's own list is `filteredSpecies`, derived from the current scope below.
   const species = useMemo(() => getSpeciesList(sightings), [sightings]);
-  const trips = useMemo(() => getTrips(sightings), [sightings]);
   const chartData = useMemo(() => getChartData(sightings, activeFilter), [sightings, activeFilter]);
 
   // Map of speciesId → lifer number (e.g. species #142 on your life list)
@@ -85,13 +103,104 @@ export default function Home() {
     [years]
   );
 
+  const comparableYears = useMemo(() => getComparableYears(sightings), [sightings]);
+
+  const comparison = useMemo(() => {
+    if (!compareYear || activeFilter === "all" || compareYear === activeFilter) return undefined;
+    return compareYears(sightings, activeFilter, compareYear);
+  }, [sightings, activeFilter, compareYear]);
+
+  const comparisonChart = useMemo(() => {
+    if (!compareYear || activeFilter === "all" || compareYear === activeFilter) return undefined;
+    return getComparisonChartData(sightings, activeFilter, compareYear);
+  }, [sightings, activeFilter, compareYear]);
+
+  /** The species in the bucket currently projected onto the map, plus which years own it. */
+  const bucketFilter = useMemo(() => {
+    if (!comparison || !compareBucket) return undefined;
+    const speciesIds = new Set(comparison[compareBucket].map((sp) => sp.speciesId));
+    if (speciesIds.size === 0) return undefined;
+    // Scope to the year the bucket belongs to: "where did I see this bird last year" is the
+    // trip-planning question, and all-time sightings would blur it with other years.
+    const years =
+      compareBucket === "onlyA"
+        ? [comparison.yearA]
+        : compareBucket === "onlyB"
+          ? [comparison.yearB]
+          : [comparison.yearA, comparison.yearB];
+    return { speciesIds, years };
+  }, [comparison, compareBucket]);
+
   const filteredSightings = useMemo(() => {
     const opts: Parameters<typeof filterSightings>[1] = {};
+    if (bucketFilter) {
+      // A bucket takes over the map: its own species set, and its own years unless widened.
+      opts.speciesIds = bucketFilter.speciesIds;
+      if (compareScope === "bucketYear") opts.years = bucketFilter.years;
+      // Clicking a single species inside the bucket narrows further.
+      if (selectedSpeciesId !== undefined) opts.speciesId = selectedSpeciesId;
+      return filterSightings(sightings, opts);
+    }
     if (activeFilter !== "all") opts.year = activeFilter;
     if (selectedTrip) opts.trip = selectedTrip;
     if (selectedSpeciesId !== undefined) opts.speciesId = selectedSpeciesId;
     return filterSightings(sightings, opts);
-  }, [sightings, activeFilter, selectedTrip, selectedSpeciesId]);
+  }, [sightings, activeFilter, selectedTrip, selectedSpeciesId, bucketFilter, compareScope]);
+
+  /** Leaving compare mode must not leave a bucket filtering the map invisibly. */
+  const handleSetCompareYear = useCallback((year: string | undefined) => {
+    setCompareYear(year);
+    if (year === undefined) {
+      setCompareBucket(undefined);
+      setSideTab((tab) => (tab === "compare" ? "species" : tab));
+    } else {
+      setSideTab("compare");
+    }
+  }, []);
+
+  const handleBucketChange = useCallback((bucket: CompareBucket | undefined) => {
+    setCompareBucket(bucket);
+    // A bucket is a set of species; a single-species selection would silently mask it.
+    setSelectedSpeciesId(undefined);
+    setSelectedTrip(undefined);
+  }, []);
+
+  /** "Compare 2026 vs 2025" in the palette: the active year against the next one down.
+   *  Falls back to the two newest comparable years when the All filter is active. */
+  const compareSuggestion = useMemo(() => {
+    if (comparison || comparableYears.length < 2) return undefined;
+    const a = activeFilter !== "all" && comparableYears.includes(activeFilter) ? activeFilter : comparableYears[0];
+    const b = comparableYears.find((y) => y < a) ?? comparableYears.find((y) => y !== a);
+    if (!b) return undefined;
+    return {
+      a,
+      b,
+      action: () => {
+        setActiveFilter(a);
+        setSelectedTrip(undefined);
+        setSelectedSpeciesId(undefined);
+        setCompareYear(b);
+        setSideTab("compare");
+      },
+    };
+  }, [comparison, comparableYears, activeFilter]);
+
+  const handleFilterChange = useCallback((value: string) => {
+    setActiveFilter(value);
+    setSelectedTrip(undefined);
+    setSelectedSpeciesId(undefined);
+    // "All" has no year to compare, and A === B is meaningless — drop out of compare mode
+    // rather than rendering an empty comparison.
+    setCompareYear((current) => {
+      if (current === undefined) return undefined;
+      if (value === "all" || value === current) {
+        setCompareBucket(undefined);
+        setSideTab((tab) => (tab === "compare" ? "species" : tab));
+        return undefined;
+      }
+      return current;
+    });
+  }, []);
 
   const handleSpeciesClick = useCallback((speciesId: number) => {
     setSelectedSpeciesId((prev) => (prev === speciesId ? undefined : speciesId));
@@ -120,12 +229,32 @@ export default function Home() {
     setHasData(false);
   }, []);
 
+  /**
+   * The scope the side panel describes: the year (or comparison bucket) currently in view,
+   * but NOT the single-species or single-trip selection. Those select *within* the scope, so
+   * folding them in here would collapse the very lists you are browsing to one row.
+   *
+   * Both the species list and the trip list derive from this, which is what keeps the header
+   * counts consistent with each other.
+   */
+  const panelSightings = useMemo(() => {
+    if (bucketFilter) {
+      return filterSightings(sightings, {
+        speciesIds: bucketFilter.speciesIds,
+        ...(compareScope === "bucketYear" ? { years: bucketFilter.years } : {}),
+      });
+    }
+    if (activeFilter === "all") return sightings;
+    return filterSightings(sightings, { year: activeFilter });
+  }, [sightings, activeFilter, bucketFilter, compareScope]);
+
   const filteredSpecies = useMemo(() => {
-    if (activeFilter === "all" && !selectedTrip) return species;
-    const filtered = filterSightings(sightings, {
-      year: activeFilter !== "all" ? activeFilter : undefined,
-      trip: selectedTrip,
-    });
+    if (panelSightings === sightings && !selectedTrip) return species;
+    // Picking a trip narrows the species list to that trip — useful, and unlike the trip list
+    // there is no self-reference problem.
+    const filtered = selectedTrip
+      ? filterSightings(panelSightings, { trip: selectedTrip })
+      : panelSightings;
     const speciesMap = new Map<number, { count: number }>();
     for (const s of filtered) {
       const existing = speciesMap.get(s.speciesId);
@@ -135,7 +264,16 @@ export default function Home() {
     return species
       .filter((sp) => speciesMap.has(sp.speciesId))
       .map((sp) => ({ ...sp, sightingCount: speciesMap.get(sp.speciesId)!.count }));
-  }, [species, sightings, activeFilter, selectedTrip]);
+  }, [species, sightings, panelSightings, selectedTrip]);
+
+  /**
+   * Trips within the current scope. Deliberately NOT narrowed by `selectedTrip`: doing so
+   * would leave exactly one row and make it impossible to click a different trip.
+   *
+   * Trips that straddle New Year (11 of mine, e.g. "Mosselbaai 2025-12") correctly appear
+   * under both years, with counts scoped to the year in view.
+   */
+  const filteredTrips = useMemo(() => getTrips(panelSightings), [panelSightings]);
 
   // Loading state
   if (loading) {
@@ -182,36 +320,51 @@ export default function Home() {
       <div className="hidden md:block">
         <SidePanel
           species={filteredSpecies}
-          trips={trips}
+          trips={filteredTrips}
           totalSightings={filteredSightings.length}
           selectedSpeciesId={selectedSpeciesId}
           onSpeciesClick={handleSpeciesClick}
           onTripClick={handleTripClick}
           activeTab={sideTab}
           onTabChange={setSideTab}
+          comparison={comparison}
+          activeBucket={compareBucket}
+          onBucketChange={handleBucketChange}
+          compareScope={compareScope}
+          onCompareScopeChange={setCompareScope}
         />
       </div>
 
       {/* Bottom bar — desktop only */}
-      <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+      <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-20 max-w-[calc(100vw-2rem)]">
         <FloatingPanel className="flex items-center gap-3 px-4 py-2.5">
-          <PillFilters
-            filters={filters}
-            activeFilter={activeFilter}
-            onFilterChange={(v) => {
-              setActiveFilter(v);
-              setSelectedTrip(undefined);
-              setSelectedSpeciesId(undefined);
-            }}
+          {/* Years scroll inside their own track; everything after this is shrink-0 so the
+              map/heatmap/chart/import actions stay reachable no matter how many years exist.
+              While comparing, the pill track collapses into the chip and hands its space back. */}
+          <YearCompareChip
+            activeYear={activeFilter}
+            compareYear={compareYear}
+            comparableYears={comparableYears}
+            onSetActiveYear={handleFilterChange}
+            onSetCompareYear={handleSetCompareYear}
           />
 
-          <div className="w-px h-6 bg-[#2a2a2a]" />
+          {!comparison && (
+            <PillFilters
+              className="flex-1"
+              filters={filters}
+              activeFilter={activeFilter}
+              onFilterChange={handleFilterChange}
+            />
+          )}
+
+          <div className="w-px h-6 bg-[#2a2a2a] shrink-0" />
 
           {(["satellite", "topo", "dark"] as MapTileStyle[]).map((style) => (
             <button
               key={style}
               onClick={() => setTileStyle(style)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
+              className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
                 tileStyle === style
                   ? "bg-white/90 text-black"
                   : "bg-[#1a1a1a] text-[#888888] border border-[#2a2a2a] hover:text-white"
@@ -225,7 +378,7 @@ export default function Home() {
 
           <button
             onClick={() => setShowHeatmap(!showHeatmap)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
               showHeatmap
                 ? "bg-[#10b981] text-black"
                 : "bg-[#1a1a1a] text-[#888888] border border-[#2a2a2a] hover:text-white"
@@ -236,7 +389,7 @@ export default function Home() {
 
           <button
             onClick={() => setShowChart(!showChart)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
               showChart
                 ? "bg-[#10b981] text-black"
                 : "bg-[#1a1a1a] text-[#888888] border border-[#2a2a2a] hover:text-white"
@@ -250,7 +403,7 @@ export default function Home() {
           {/* Import more / Clear data */}
           <button
             onClick={() => setHasData(false)}
-            className="px-3 py-1.5 rounded-full text-sm font-medium bg-[#1a1a1a] text-[#888888] border border-[#2a2a2a] hover:text-white transition-all"
+            className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium bg-[#1a1a1a] text-[#888888] border border-[#2a2a2a] hover:text-white transition-all"
             title="Import more trips"
           >
             <span className="flex items-center gap-1"><span className="text-base leading-none">+</span> Import</span>
@@ -280,7 +433,7 @@ export default function Home() {
       {/* Bottom sheet — mobile only */}
       <BottomSheet
         species={filteredSpecies}
-        trips={trips}
+        trips={filteredTrips}
         totalSightings={filteredSightings.length}
         selectedSpeciesId={selectedSpeciesId}
         onSpeciesClick={handleSpeciesClick}
@@ -289,11 +442,15 @@ export default function Home() {
         onTabChange={setSideTab}
         filters={filters}
         activeFilter={activeFilter}
-        onFilterChange={(v) => {
-          setActiveFilter(v);
-          setSelectedTrip(undefined);
-          setSelectedSpeciesId(undefined);
-        }}
+        onFilterChange={handleFilterChange}
+        comparison={comparison}
+        compareYear={compareYear}
+        comparableYears={comparableYears}
+        onSetCompareYear={handleSetCompareYear}
+        activeBucket={compareBucket}
+        onBucketChange={handleBucketChange}
+        compareScope={compareScope}
+        onCompareScopeChange={setCompareScope}
         tileStyle={tileStyle}
         onTileStyleChange={setTileStyle}
         showHeatmap={showHeatmap}
@@ -309,6 +466,7 @@ export default function Home() {
         activeFilter={activeFilter}
         visible={showChart}
         onClose={() => setShowChart(false)}
+        comparison={comparisonChart}
       />
 
       <CommandPalette
@@ -321,6 +479,7 @@ export default function Home() {
         onClearFilters={clearFilters}
         onImportMore={() => setHasData(false)}
         onClearData={handleClearData}
+        compareSuggestion={compareSuggestion}
       />
     </main>
   );

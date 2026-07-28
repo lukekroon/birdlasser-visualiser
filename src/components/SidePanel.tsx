@@ -2,8 +2,11 @@
 
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Species, Trip } from "@/data/types";
+import { CompareBucket, Species, Trip, YearComparison } from "@/data/types";
 import FloatingPanel from "./FloatingPanel";
+import CompareList, { CompareScope } from "./CompareList";
+
+export type SideTab = "species" | "trips" | "compare";
 
 interface SidePanelProps {
   species: Species[];
@@ -12,8 +15,14 @@ interface SidePanelProps {
   selectedSpeciesId?: number;
   onSpeciesClick: (speciesId: number) => void;
   onTripClick: (tripName: string) => void;
-  activeTab: "species" | "trips";
-  onTabChange: (tab: "species" | "trips") => void;
+  activeTab: SideTab;
+  onTabChange: (tab: SideTab) => void;
+  /** Present only while two years are being compared. */
+  comparison?: YearComparison;
+  activeBucket?: CompareBucket;
+  onBucketChange: (bucket: CompareBucket | undefined) => void;
+  compareScope: CompareScope;
+  onCompareScopeChange: (scope: CompareScope) => void;
 }
 
 function SpeciesList({
@@ -154,7 +163,15 @@ export default function SidePanel({
   onTripClick,
   activeTab,
   onTabChange,
+  comparison,
+  activeBucket,
+  onBucketChange,
+  compareScope,
+  onCompareScopeChange,
 }: SidePanelProps) {
+  // The Compare tab only exists while a comparison is active; fall back to Species so the panel
+  // never renders an empty body if the comparison is cleared while that tab is open.
+  const tab: SideTab = activeTab === "compare" && !comparison ? "species" : activeTab;
   return (
     <FloatingPanel className="absolute top-20 left-4 z-20 w-80 max-h-[calc(100vh-120px)] flex flex-col">
       {/* Stats header */}
@@ -180,7 +197,7 @@ export default function SidePanel({
         <button
           onClick={() => onTabChange("species")}
           className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "species"
+            tab === "species"
               ? "text-[#10b981] border-b-2 border-[#10b981]"
               : "text-[#888888] hover:text-white"
           }`}
@@ -190,17 +207,39 @@ export default function SidePanel({
         <button
           onClick={() => onTabChange("trips")}
           className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "trips"
+            tab === "trips"
               ? "text-[#10b981] border-b-2 border-[#10b981]"
               : "text-[#888888] hover:text-white"
           }`}
         >
           Trips
         </button>
+        {comparison && (
+          <button
+            onClick={() => onTabChange("compare")}
+            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+              tab === "compare"
+                ? "text-[#10b981] border-b-2 border-[#10b981]"
+                : "text-[#888888] hover:text-white"
+            }`}
+          >
+            Compare
+          </button>
+        )}
       </div>
 
       {/* Virtualized list */}
-      {activeTab === "species" ? (
+      {tab === "compare" && comparison ? (
+        <CompareList
+          comparison={comparison}
+          selectedSpeciesId={selectedSpeciesId}
+          onSpeciesClick={onSpeciesClick}
+          activeBucket={activeBucket}
+          onBucketChange={onBucketChange}
+          scope={compareScope}
+          onScopeChange={onCompareScopeChange}
+        />
+      ) : tab === "species" ? (
         <SpeciesList
           species={species}
           selectedSpeciesId={selectedSpeciesId}

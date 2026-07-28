@@ -2,9 +2,12 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Species, Trip } from "@/data/types";
+import { CompareBucket, Species, Trip, YearComparison } from "@/data/types";
 import { MapTileStyle } from "@/components/MapView";
 import PillFilters from "./PillFilters";
+import CompareList, { CompareScope } from "./CompareList";
+import YearCompareChip from "./YearCompareChip";
+import type { SideTab } from "./SidePanel";
 
 type SnapState = "collapsed" | "half" | "full";
 
@@ -24,11 +27,19 @@ interface BottomSheetProps {
   selectedSpeciesId?: number;
   onSpeciesClick: (id: number) => void;
   onTripClick: (name: string) => void;
-  activeTab: "species" | "trips";
-  onTabChange: (tab: "species" | "trips") => void;
+  activeTab: SideTab;
+  onTabChange: (tab: SideTab) => void;
   filters: { label: string; value: string }[];
   activeFilter: string;
   onFilterChange: (v: string) => void;
+  comparison?: YearComparison;
+  compareYear?: string;
+  comparableYears: string[];
+  onSetCompareYear: (year: string | undefined) => void;
+  activeBucket?: CompareBucket;
+  onBucketChange: (bucket: CompareBucket | undefined) => void;
+  compareScope: CompareScope;
+  onCompareScopeChange: (scope: CompareScope) => void;
   tileStyle: MapTileStyle;
   onTileStyleChange: (s: MapTileStyle) => void;
   showHeatmap: boolean;
@@ -158,6 +169,14 @@ export default function BottomSheet({
   filters,
   activeFilter,
   onFilterChange,
+  comparison,
+  compareYear,
+  comparableYears,
+  onSetCompareYear,
+  activeBucket,
+  onBucketChange,
+  compareScope,
+  onCompareScopeChange,
   tileStyle,
   onTileStyleChange,
   showHeatmap,
@@ -167,6 +186,8 @@ export default function BottomSheet({
   onImportMore,
   collapseWhenTrue,
 }: BottomSheetProps) {
+  // Mirror SidePanel: never render the Compare tab body without a comparison behind it.
+  const tab: SideTab = activeTab === "compare" && !comparison ? "species" : activeTab;
   const [snap, setSnap] = useState<SnapState>("collapsed");
 
   useEffect(() => {
@@ -326,9 +347,25 @@ export default function BottomSheet({
             </button>
           </div>
 
-          {/* Year filters */}
-          <div className="flex-shrink-0 px-3 py-2.5 border-b border-[#2a2a2a]">
-            <PillFilters filters={filters} activeFilter={activeFilter} onFilterChange={onFilterChange} />
+          {/* Year filters + compare entry */}
+          <div className="flex-shrink-0 px-3 py-2.5 border-b border-[#2a2a2a] flex items-center gap-2">
+            <YearCompareChip
+              activeYear={activeFilter}
+              compareYear={compareYear}
+              comparableYears={comparableYears}
+              onSetActiveYear={onFilterChange}
+              onSetCompareYear={onSetCompareYear}
+            />
+            {!comparison && (
+              // No chevrons on mobile — swiping the track is the natural gesture there.
+              <PillFilters
+                className="flex-1"
+                chevrons={false}
+                filters={filters}
+                activeFilter={activeFilter}
+                onFilterChange={onFilterChange}
+              />
+            )}
           </div>
 
           {/* Tab bar */}
@@ -336,7 +373,7 @@ export default function BottomSheet({
             <button
               onClick={() => onTabChange("species")}
               className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === "species"
+                tab === "species"
                   ? "text-[#10b981] border-b-2 border-[#10b981]"
                   : "text-[#888888]"
               }`}
@@ -346,17 +383,39 @@ export default function BottomSheet({
             <button
               onClick={() => onTabChange("trips")}
               className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === "trips"
+                tab === "trips"
                   ? "text-[#10b981] border-b-2 border-[#10b981]"
                   : "text-[#888888]"
               }`}
             >
               Trips
             </button>
+            {comparison && (
+              <button
+                onClick={() => onTabChange("compare")}
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                  tab === "compare"
+                    ? "text-[#10b981] border-b-2 border-[#10b981]"
+                    : "text-[#888888]"
+                }`}
+              >
+                Compare
+              </button>
+            )}
           </div>
 
           {/* Virtualized list */}
-          {activeTab === "species" ? (
+          {tab === "compare" && comparison ? (
+            <CompareList
+              comparison={comparison}
+              selectedSpeciesId={selectedSpeciesId}
+              onSpeciesClick={onSpeciesClick}
+              activeBucket={activeBucket}
+              onBucketChange={onBucketChange}
+              scope={compareScope}
+              onScopeChange={onCompareScopeChange}
+            />
+          ) : tab === "species" ? (
             <SpeciesList
               species={species}
               selectedSpeciesId={selectedSpeciesId}

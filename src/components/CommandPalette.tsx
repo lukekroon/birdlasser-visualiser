@@ -13,6 +13,8 @@ interface CommandPaletteProps {
   onClearFilters: () => void;
   onClearData?: () => void;
   onImportMore?: () => void;
+  /** One-keystroke way into year comparison: the active year against the previous one. */
+  compareSuggestion?: { a: string; b: string; action: () => void };
 }
 
 export default function CommandPalette({
@@ -25,6 +27,7 @@ export default function CommandPalette({
   onClearFilters,
   onClearData,
   onImportMore,
+  compareSuggestion,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +70,10 @@ export default function CommandPalette({
   const actions = [
     { label: "Toggle heatmap", action: onToggleHeatmap },
     { label: "Toggle life list chart", action: onToggleChart },
+    // Offered only when there are two comparable years and a concrete one is selected.
+    ...(compareSuggestion
+      ? [{ label: `Compare ${compareSuggestion.a} vs ${compareSuggestion.b}`, action: compareSuggestion.action }]
+      : []),
     { label: "Clear all filters", action: onClearFilters },
     ...(onImportMore ? [{ label: "Import more trips", action: onImportMore }] : []),
     ...(onClearData ? [{ label: "Clear all data", action: onClearData }] : []),
